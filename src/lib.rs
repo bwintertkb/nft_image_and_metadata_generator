@@ -3,6 +3,8 @@
 //! Inspired by hashlips 'nft_image_and_metada_generator' provides functionality to generate NFT images as well as their respective metadata
 //! for both the Etherium and Solana network. Note that this is the initial release, subsequent releases will contain performance improvements
 //! and general code optimizations.
+//!
+//! Github: ```https://github.com/bwintertkb/nft_image_and_metadata_generator```
 
 //! # Example of how to generate NFT images and metadata.
 //! The following code demonstrates how to generate the NFT images along with metadata.
