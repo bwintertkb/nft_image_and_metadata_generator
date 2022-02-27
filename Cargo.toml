@@ -1,0 +1,22 @@
+[package]
+authors = ["bwinter"]
+description = "A hashlips inspired NFT image + metadata generator for Etherium and Solana, written completely in Rust."
+edition = "2021"
+license = "MIT"
+name = "nft_image_and_metadata_generator"
+version = "0.1.0"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+image = "0.24.0"
+json = "0.12.4"
+rand = "0.8.5"
+regex = "1"
+sha256 = "1.0.3"
+
+[profile.dev]
+opt-level = 0
+
+[profile.release]
+opt-level = 3
