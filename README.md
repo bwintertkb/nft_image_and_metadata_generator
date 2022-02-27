@@ -1,15 +1,19 @@
 # nft_image_and_metadata_generator
+
 Generate NFT images and their respective metadata for the Ethereum and Solana networks. Please note that this is an initial release, although completely functioning, future updates will
 revolve around code optimisation and adding functionality.
 
 ### Version
+
 ```
 [dependencies]
-nft_image_and_metadata_generator = "0.1.0"
+nft_image_and_metadata_generator = "0.1.1"
 ```
 
 ### Example
+
 The following is an example using hashlips art engine assets (see https://github.com/HashLips/hashlips_art_engine.git).
+
 ```
 use nft_image_and_metadata_generator::{
     metadata::{Creator, MetadataHeader},
@@ -67,3 +71,7 @@ fn main() {
     img.generate();
 }
 ```
+
+### License
+
+`nft_image_and_metadata_generator` is distributed under the terms of the MIT license.
