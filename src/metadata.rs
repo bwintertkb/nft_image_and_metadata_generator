@@ -40,7 +40,7 @@ impl<'a> MetadataHeader<'a> {
 }
 
 /// ```Creator``` object used to define where the distribution of assets will go.
-/// Only important for Solana, for Etherium you can fill these fields with random values of the correct type.
+/// Only important for Solana, for Ethereum you can fill these fields with random values of the correct type.
 /// ```address``` refers to the Solana address of the payee wallet. ```share``` is the percentage of Sol to be
 /// sent to the address. Note that for multiple ```Creator``` objects the sum of the shares must equal 100.
 #[derive(Debug, Clone)]

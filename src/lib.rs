@@ -1,7 +1,7 @@
-//! # NFT image and metadata generator for Etherium and Solana
+//! # NFT image and metadata generator for Ethereum and Solana
 //!
 //! Inspired by hashlips 'nft_image_and_metada_generator' provides functionality to generate NFT images as well as their respective metadata
-//! for both the Etherium and Solana network. Note that this is the initial release, subsequent releases will contain performance improvements
+//! for both the Ethereum and Solana network. Note that this is the initial release, subsequent releases will contain performance improvements
 //! and general code optimizations.
 //!
 //! Github: ```https://github.com/bwintertkb/nft_image_and_metadata_generator```
@@ -90,10 +90,10 @@ extern crate sha256;
 const DEFAULT_ASSET_DIR_NAME: &str = "assets";
 const DEFAULT_METADATA_DIR_NAME: &str = "metadata";
 
-/// Enum to distinguish between the Etherium and Solana networks
+/// Enum to distinguish between the Ethereum and Solana networks
 #[derive(Debug, Clone)]
 pub enum Network {
-    /// Etherium network
+    /// Ethereum network
     Eth,
     /// Solana network
     Sol,
@@ -105,7 +105,7 @@ pub enum Network {
 /// - ```output_path```: Path to where the generated NFTs and metadata will be stored. The assets with individual
 /// asset metadata will be stored in the created path /output_path/assets and combined metadata /output__path/metadata
 /// - ```network```: Expects the Network enum, defining which network the NFTs are created for
-/// - ```base_uri```: Base URI for the NFTs, important for Etherium, ignore for Solana.
+/// - ```base_uri```: Base URI for the NFTs, important for Ethereum, ignore for Solana.
 /// - ```layer_order```: Order in which the NFTs will be layered, e.g. ["background", "layer1", "layer2"] will use a "background" image as
 ///  the first layer, "layer1" image as the second layer and "layer2" image as the third layer
 /// - ```layer_exclusion_prob```: Defines the probability in which a particular layer will be excluded, e.g. [0.0, 0.0, 0.1] will mean the third layer

@@ -1,6 +1,6 @@
 [package]
 authors = ["bwinter"]
-description = "A hashlips inspired NFT image + metadata generator for Etherium and Solana, written completely in Rust."
+description = "A hashlips inspired NFT image + metadata generator for Ethereum and Solana, written completely in Rust."
 documentation = "https://docs.rs/nft_image_and_metadata_generator/0.1.0/nft_image_and_metadata_generator/"
 edition = "2021"
 license = "MIT"
