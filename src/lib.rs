@@ -233,20 +233,29 @@ impl<'a> ImageGenerator<'a> {
         metadata: &String,
     ) -> std::io::Result<()> {
         self.set_up_output_directory(data_type.clone())?;
-        let mut path = String::from(self.output_path);
-        path.push(std::path::MAIN_SEPARATOR);
-        path.push_str(&data_type);
-        path.push(std::path::MAIN_SEPARATOR);
-        path.push_str(&file_name);
+        let path = util::create_path(vec![
+            &String::from(self.output_path),
+            &data_type,
+            &file_name,
+        ]);
         std::fs::write(path, metadata)?;
 
         Ok(())
     }
 
-    fn format_full_metadata(&self, data: String) -> String {
+    fn format_full_metadata(&self, data: Vec<String>) -> String {
+        let data_len = data.len();
+        let mut data_store: Vec<String> = vec![String::new(); data_len];
+        for (idx, mut val) in data.into_iter().enumerate() {
+            if idx < data_len - 1 {
+                val.push(',');
+            }
+            data_store[idx] = val
+        }
+        let str_data_store = String::from_iter(data_store);
         let mut s_bracket = String::from("[");
         let e_bracket = String::from("]");
-        s_bracket.push_str(&data);
+        s_bracket.push_str(&str_data_store);
         s_bracket.push_str(&e_bracket);
         s_bracket
     }
@@ -325,7 +334,7 @@ impl<'a> ImageGenerator<'a> {
             self.idx += 1;
             full_metadata.push(data);
         }
-        let full_metadata = self.format_full_metadata(String::from_iter(full_metadata));
+        let full_metadata = self.format_full_metadata(full_metadata);
 
         self.output_metadata_to_disk(
             String::from(DEFAULT_METADATA_DIR_NAME),
@@ -362,7 +371,7 @@ impl<'a> ImageGenerator<'a> {
             base_img.save(output_path.clone()).unwrap();
             output_paths[idx] = output_path;
             print!(
-                "\rGenerating images, pct. complete (image): {:.2}%",
+                "\rGenerating images, pct. complete: {:.2}%",
                 ((idx as f32 + 1.) / self.num_assets as f32) * 100.
             );
             std::io::stdout().flush().unwrap();
@@ -420,7 +429,7 @@ impl<'a> ImageGenerator<'a> {
         prob_range
     }
 
-    fn get_weighted_index(&self, prob_range: Vec<(f32, f32)>) -> usize {
+    fn get_weighted_index(&self, prob_range: &Vec<(f32, f32)>) -> usize {
         // Generate uniform dist. num and get the index from prob_range
         let mut rng = rand::thread_rng();
         let rand = rng.gen::<f32>();
@@ -447,14 +456,15 @@ impl<'a> ImageGenerator<'a> {
         false
     }
 
-    fn get_weighted_asset(&self, layer: &Vec<String>) -> usize {
-        let weights = self.get_asset_weights(layer);
-        let prob = self.get_prob_from_weights(&weights);
-        let prob_range = self.create_prob_range_vec(prob);
+    fn get_weighted_asset(&self, layer: &Vec<String>, prob_range: &Vec<(f32, f32)>) -> usize {
         self.get_weighted_index(prob_range)
     }
 
-    fn create_asset_path(&self, assets: &HashMap<String, Vec<String>>) -> (Vec<String>, String) {
+    fn create_asset_path(
+        &self,
+        assets: &HashMap<String, Vec<String>>,
+        layer_prob_ranges: &HashMap<String, Vec<(f32, f32)>>,
+    ) -> (Vec<String>, String) {
         let mut asset_path: Vec<String> = Vec::new();
         let mut concat_path = String::new();
 
@@ -471,7 +481,8 @@ impl<'a> ImageGenerator<'a> {
                 continue;
             }
             let _layer = assets.get(*odr).unwrap();
-            let _asset_name = _layer[self.get_weighted_asset(_layer)].clone();
+            let prob_range = layer_prob_ranges.get(&odr.to_string()).unwrap();
+            let _asset_name = _layer[self.get_weighted_asset(_layer, prob_range)].clone();
             let full_asset_path = util::create_path(vec![
                 &String::from(self.root_asset_path),
                 &String::from(*odr),
@@ -484,17 +495,32 @@ impl<'a> ImageGenerator<'a> {
         (asset_path, sha256::digest(concat_path))
     }
 
+    fn create_layer_prob_ranges(
+        &self,
+        assets: &HashMap<String, Vec<String>>,
+    ) -> HashMap<String, Vec<(f32, f32)>> {
+        let mut layer_prob_ranges: HashMap<String, Vec<(f32, f32)>> = HashMap::new();
+        for (key, val) in assets.iter() {
+            let weights = self.get_asset_weights(val);
+            let prob = self.get_prob_from_weights(&weights);
+            let prob_range = self.create_prob_range_vec(prob);
+            layer_prob_ranges.insert(key.to_string(), prob_range);
+        }
+        layer_prob_ranges
+    }
+
     fn gen_mix_assets_paths(&self) -> Vec<Vec<String>> {
         // Generate the assets that will be mixed
         let assets = self.get_assets();
         let mut _assets_path_store: Vec<Vec<String>> = vec![Vec::new(); self.num_assets as usize];
 
+        let layer_prob_ranges = self.create_layer_prob_ranges(&assets);
         let mut ctr: usize = 0;
         let mut dna_store: Vec<String> = vec![String::new(); self.num_assets as usize];
         while ctr < _assets_path_store.len() {
             print!("\rFound: {}/{} unique assets", ctr + 1, self.num_assets);
             std::io::stdout().flush().unwrap();
-            let (path, hash) = self.create_asset_path(&assets);
+            let (path, hash) = self.create_asset_path(&assets, &layer_prob_ranges);
             if dna_store.contains(&hash) {
                 continue;
             }

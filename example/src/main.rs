@@ -1,24 +1,3 @@
-# nft_image_and_metadata_generator
-
-Generate NFT images and their respective metadata for the Ethereum and Solana networks. Please note that this is an initial release, although completely functioning, future updates will
-revolve around code optimisation and adding functionality.
-
-### Video guide
-
-The video guide can be found here: https://www.youtube.com/watch?v=XgQ2sTE5CfI&ab_channel=Bartek
-
-### Version
-
-```
-[dependencies]
-nft_image_and_metadata_generator = "0.1.2"
-```
-
-### Example
-
-The following is the example in the example directory.
-
-```
 use nft_image_and_metadata_generator::{
     metadata::{Creator, MetadataHeader},
     ImageGenerator, Network,
@@ -70,8 +49,3 @@ fn main() {
     );
     img.generate().unwrap();
 }
-```
-
-### License
-
-`nft_image_and_metadata_generator` is distributed under the terms of the MIT license.

@@ -1,0 +1,9 @@
+[package]
+edition = "2021"
+name = "example"
+version = "0.1.0"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+nft_image_and_metadata_generator = "0.1.2"
