@@ -456,7 +456,7 @@ impl<'a> ImageGenerator<'a> {
         false
     }
 
-    fn get_weighted_asset(&self, layer: &Vec<String>, prob_range: &Vec<(f32, f32)>) -> usize {
+    fn get_weighted_asset(&self, prob_range: &Vec<(f32, f32)>) -> usize {
         self.get_weighted_index(prob_range)
     }
 
@@ -482,7 +482,7 @@ impl<'a> ImageGenerator<'a> {
             }
             let _layer = assets.get(*odr).unwrap();
             let prob_range = layer_prob_ranges.get(&odr.to_string()).unwrap();
-            let _asset_name = _layer[self.get_weighted_asset(_layer, prob_range)].clone();
+            let _asset_name = _layer[self.get_weighted_asset(prob_range)].clone();
             let full_asset_path = util::create_path(vec![
                 &String::from(self.root_asset_path),
                 &String::from(*odr),
