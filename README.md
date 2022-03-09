@@ -11,12 +11,13 @@ The video guide can be found here: https://www.youtube.com/watch?v=XgQ2sTE5CfI&a
 
 ```
 [dependencies]
-nft_image_and_metadata_generator = "0.1.2"
+nft_image_and_metadata_generator = "0.1.3"
 ```
 
 ### Example
 
-The following is the example in the example directory.
+The following is the example in the example directory. Note, that the images and metadata will be written to ./output/assets/images and
+./output/assets/metadata. The concatenated metadata will be written to ./output/metadata.
 
 ```
 use nft_image_and_metadata_generator::{
