@@ -10,8 +10,8 @@
 pub struct MetadataHeader<'a> {
     /// Name of the NFT collection
     pub collection_name: String,
-    symbol: &'a str,
-    description: &'a str,
+    pub symbol: &'a str,
+    pub description: &'a str,
     seller_fee_basis_points: u32,
     external_url: &'a str,
     /// Vector containing ```Creator``` structs instances.

@@ -88,6 +88,8 @@ extern crate rand;
 extern crate sha256;
 
 const DEFAULT_ASSET_DIR_NAME: &str = "assets";
+const DEFAULT_ASSET_SUBDIR_IMG_NAME: &str = "images";
+const DEFAULT_ASSET_SUBDIR_METADATA_NAME: &str = "metadata";
 const DEFAULT_METADATA_DIR_NAME: &str = "metadata";
 
 /// Enum to distinguish between the Ethereum and Solana networks
@@ -213,14 +215,35 @@ impl<'a> ImageGenerator<'a> {
     }
 
     fn set_up_output_directory(&self, data_type: String) -> std::io::Result<()> {
-        let mut path = String::from(self.output_path);
+        let path = String::from(self.output_path);
         if Path::new(&path).exists() == false {
             std::fs::create_dir(&path)?;
         }
-        path.push(std::path::MAIN_SEPARATOR);
-        path.push_str(&data_type);
-        if Path::new(&path).exists() == false {
-            std::fs::create_dir(&path)?;
+        let data_type_path = util::create_path(vec![&path, &data_type]);
+        if Path::new(&data_type_path).exists() == false {
+            std::fs::create_dir(&data_type_path)?;
+        }
+
+        if data_type != DEFAULT_ASSET_DIR_NAME {
+            return Ok(());
+        }
+
+        let img_path = util::create_path(vec![
+            &path,
+            &data_type,
+            &DEFAULT_ASSET_SUBDIR_IMG_NAME.to_string(),
+        ]);
+        if Path::new(&img_path).exists() == false {
+            std::fs::create_dir(&img_path)?;
+        }
+
+        let metadata_path = util::create_path(vec![
+            &path,
+            &data_type,
+            &DEFAULT_ASSET_SUBDIR_METADATA_NAME.to_string(),
+        ]);
+        if Path::new(&metadata_path).exists() == false {
+            std::fs::create_dir(&metadata_path)?;
         }
 
         Ok(())
@@ -229,15 +252,10 @@ impl<'a> ImageGenerator<'a> {
     fn output_metadata_to_disk(
         &self,
         data_type: String,
-        file_name: String,
+        path: String,
         metadata: &String,
     ) -> std::io::Result<()> {
         self.set_up_output_directory(data_type.clone())?;
-        let path = util::create_path(vec![
-            &String::from(self.output_path),
-            &data_type,
-            &file_name,
-        ]);
         std::fs::write(path, metadata)?;
 
         Ok(())
@@ -293,7 +311,6 @@ impl<'a> ImageGenerator<'a> {
         img_metadata["image"] = format!("{}{}{}.png", self.base_uri, '/', self.idx).into();
         img_metadata["edition"] = self.idx.into();
         img_metadata["image_sha256"] = hash.into();
-        img_metadata["name"] = format!("{}{}", self.delimeter, self.idx).into();
         img_metadata.remove("creators");
         let mut att_store: Vec<json::JsonValue> = Vec::new();
         for path in asset_paths {
@@ -303,8 +320,9 @@ impl<'a> ImageGenerator<'a> {
             att_store.push(att.to_json());
         }
         img_metadata["attributes"] = att_store.into();
+        let compiler: String = String::from("Rust NFT image and metadata generator");
+        img_metadata["compiler"] = compiler.into();
         img_metadata.remove("symbol");
-        img_metadata.remove("description");
         img_metadata.remove("seller_fee_basis_points");
         img_metadata
     }
@@ -326,19 +344,25 @@ impl<'a> ImageGenerator<'a> {
                 Network::Sol => self.sol_metadata(asset_path, hash),
             };
             let data = metadata.to_string();
-            self.output_metadata_to_disk(
-                String::from(DEFAULT_ASSET_DIR_NAME),
-                format!("{}.json", self.idx),
-                &data,
-            )?;
+            let path = util::create_path(vec![
+                &String::from(self.output_path),
+                &String::from(DEFAULT_ASSET_DIR_NAME),
+                &String::from(DEFAULT_ASSET_SUBDIR_METADATA_NAME),
+                &format!("{}.json", self.idx),
+            ]);
+            self.output_metadata_to_disk(String::from(DEFAULT_ASSET_DIR_NAME), path, &data)?;
             self.idx += 1;
             full_metadata.push(data);
         }
         let full_metadata = self.format_full_metadata(full_metadata);
-
+        let path = util::create_path(vec![
+            &String::from(self.output_path),
+            &String::from(DEFAULT_METADATA_DIR_NAME),
+            &String::from("_metadata.json"),
+        ]);
         self.output_metadata_to_disk(
             String::from(DEFAULT_METADATA_DIR_NAME),
-            String::from("_metadata.json"),
+            path,
             &full_metadata,
         )?;
 
@@ -365,6 +389,7 @@ impl<'a> ImageGenerator<'a> {
             let output_path = util::create_path(vec![
                 &String::from(self.output_path),
                 &String::from(DEFAULT_ASSET_DIR_NAME),
+                &String::from(DEFAULT_ASSET_SUBDIR_IMG_NAME),
                 &format!("{}.png", self.idx),
             ]);
 
