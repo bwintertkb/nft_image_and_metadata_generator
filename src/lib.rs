@@ -78,12 +78,7 @@ mod util;
 
 use crate::metadata::{Attributes, Files, Json, MetadataHeader, Properties};
 use crate::rand::Rng;
-use std::collections::HashMap;
-use std::fs;
-use std::io::Write;
-use std::path::Path;
-use std::sync::Arc;
-use std::thread;
+use std::{collections::HashMap, fs, io::Write, sync::Arc, thread};
 
 extern crate image;
 extern crate rand;
@@ -194,37 +189,27 @@ impl<'a> ImageGenerator<'a> {
         }
     }
 
-    fn set_up_output_directory(&self, data_type: String) -> std::io::Result<()> {
+    fn set_up_output_directory(&self) -> std::io::Result<()> {
         let path = self.output_path.to_owned();
-        if Path::new(&path).exists() == false {
-            std::fs::create_dir(&path)?;
-        }
-        let data_type_path = util::create_path(vec![&path, &DEFAULT_ASSET_DIR_NAME.to_owned()]);
-        if Path::new(&data_type_path).exists() == false {
-            std::fs::create_dir(&data_type_path)?;
-        }
-        let data_type_path = util::create_path(vec![&path, &DEFAULT_METADATA_DIR_NAME.to_owned()]);
-        if Path::new(&data_type_path).exists() == false {
-            std::fs::create_dir(&data_type_path)?;
-        }
-
-        let img_path = util::create_path(vec![
+        util::create_dir(&util::generate_path(vec![&path]))?;
+        util::create_dir(&util::generate_path(vec![
+            &path,
+            &DEFAULT_ASSET_DIR_NAME.to_owned(),
+        ]))?;
+        util::create_dir(&util::generate_path(vec![
+            &path,
+            &DEFAULT_METADATA_DIR_NAME.to_owned(),
+        ]))?;
+        util::create_dir(&util::generate_path(vec![
             &path,
             &DEFAULT_ASSET_DIR_NAME.to_owned(),
             &DEFAULT_ASSET_SUBDIR_IMG_NAME.to_owned(),
-        ]);
-        if Path::new(&img_path).exists() == false {
-            std::fs::create_dir(&img_path)?;
-        }
-
-        let metadata_path = util::create_path(vec![
+        ]))?;
+        util::create_dir(&util::generate_path(vec![
             &path,
             &DEFAULT_ASSET_DIR_NAME.to_owned(),
             &DEFAULT_ASSET_SUBDIR_METADATA_NAME.to_owned(),
-        ]);
-        if Path::new(&metadata_path).exists() == false {
-            std::fs::create_dir(&metadata_path)?;
-        }
+        ]))?;
 
         Ok(())
     }
@@ -233,7 +218,7 @@ impl<'a> ImageGenerator<'a> {
         let mut output_paths = vec![String::new(); num_paths];
         let mut idx = self.idx;
         for i in 0..num_paths {
-            let output_path = util::create_path(vec![
+            let output_path = util::generate_path(vec![
                 &String::from(self.output_path),
                 &String::from(DEFAULT_ASSET_DIR_NAME),
                 &String::from(DEFAULT_ASSET_SUBDIR_IMG_NAME),
@@ -251,8 +236,7 @@ impl<'a> ImageGenerator<'a> {
     pub fn generate(&self) -> Result<(), std::io::Error> {
         let mixed_asset_paths = self.gen_mix_assets_paths();
         let output_paths: Vec<String> = self.get_output_paths(mixed_asset_paths.len());
-        self.set_up_output_directory(DEFAULT_ASSET_DIR_NAME.to_string())
-            .unwrap();
+        self.set_up_output_directory()?;
 
         let num = self.num_assets as usize;
         let mut threads = Vec::new();
@@ -279,8 +263,6 @@ impl<'a> ImageGenerator<'a> {
         for h in threads.into_iter() {
             h.join().unwrap();
         }
-        //self.gen_img_metadata(&mixed_asset_paths, &output_paths)?;
-
         Ok(())
     }
 
@@ -384,7 +366,7 @@ impl<'a> ImageGenerator<'a> {
             let _layer = assets.get(*odr).unwrap();
             let prob_range = layer_prob_ranges.get(&odr.to_string()).unwrap();
             let _asset_name = _layer[self.get_weighted_asset(prob_range)].clone();
-            let full_asset_path = util::create_path(vec![
+            let full_asset_path = util::generate_path(vec![
                 &String::from(self.root_asset_path),
                 &String::from(*odr),
                 &_asset_name,
@@ -562,8 +544,8 @@ impl ImageHandler {
             let att: Attributes = Attributes::new(trait_type, value);
             att_store.push(att.to_json());
         }
-        let files = Files::new(format!("{}.png", self.idx), String::from("image/png"));
-        let category = String::from("image");
+        let files = Files::new(format!("{}.png", self.idx), "image/png".to_owned());
+        let category = "image".to_owned();
         let prop = Properties::new(vec![files], category, creators);
         let prop_json = prop.to_json();
         img_metadata["attributes"] = att_store.into();
@@ -586,7 +568,7 @@ impl ImageHandler {
             att_store.push(att.to_json());
         }
         img_metadata["attributes"] = att_store.into();
-        let compiler: String = String::from("Rust NFT image and metadata generator");
+        let compiler: String = "Rust NFT image and metadata generator".to_owned();
         img_metadata["compiler"] = compiler.into();
         img_metadata.remove("symbol");
         img_metadata.remove("seller_fee_basis_points");
@@ -603,27 +585,23 @@ impl ImageHandler {
                 Network::Sol => self.sol_metadata(&asset_path, i),
             };
             let data = metadata.to_string();
-            let path = util::create_path(vec![
+            let path = util::generate_path(vec![
                 &String::from(self.output_path.clone()),
                 &String::from(DEFAULT_ASSET_DIR_NAME),
                 &String::from(DEFAULT_ASSET_SUBDIR_METADATA_NAME),
                 &format!("{}.json", i),
             ]);
-            self.output_metadata_to_disk(String::from(DEFAULT_ASSET_DIR_NAME), path, &data)?;
+            self.output_metadata_to_disk(path, &data)?;
             i += 1;
             full_metadata.push(data);
         }
         let full_metadata = self.format_full_metadata(full_metadata);
-        let path = util::create_path(vec![
+        let path = util::generate_path(vec![
             &String::from(self.output_path.clone()),
             &String::from(DEFAULT_METADATA_DIR_NAME),
             &String::from("_metadata.json"),
         ]);
-        self.output_metadata_to_disk(
-            String::from(DEFAULT_METADATA_DIR_NAME),
-            path,
-            &full_metadata,
-        )?;
+        self.output_metadata_to_disk(path, &full_metadata)?;
 
         Ok(())
     }
@@ -633,13 +611,7 @@ impl ImageHandler {
         String::from(split_asset_name[0])
     }
 
-    fn output_metadata_to_disk(
-        &self,
-        data_type: String,
-        path: String,
-        metadata: &String,
-    ) -> std::io::Result<()> {
-        //self.set_up_output_directory(data_type.clone())?;
+    fn output_metadata_to_disk(&self, path: String, metadata: &String) -> std::io::Result<()> {
         std::fs::write(path, metadata)?;
 
         Ok(())
@@ -661,41 +633,6 @@ impl ImageHandler {
         s_bracket.push_str(&e_bracket);
         s_bracket
     }
-
-    // fn set_up_output_directory(&self, data_type: String) -> std::io::Result<()> {
-    //     let path = String::from(self.output_path.clone());
-    //     if Path::new(&path).exists() == false {
-    //         std::fs::create_dir(&path)?;
-    //     }
-    //     let data_type_path = util::create_path(vec![&path, &data_type]);
-    //     if Path::new(&data_type_path).exists() == false {
-    //         std::fs::create_dir(&data_type_path)?;
-    //     }
-
-    //     if data_type != DEFAULT_ASSET_DIR_NAME {
-    //         return Ok(());
-    //     }
-
-    //     let img_path = util::create_path(vec![
-    //         &path,
-    //         &data_type,
-    //         &DEFAULT_ASSET_SUBDIR_IMG_NAME.to_string(),
-    //     ]);
-    //     if Path::new(&img_path).exists() == false {
-    //         std::fs::create_dir(&img_path)?;
-    //     }
-
-    //     let metadata_path = util::create_path(vec![
-    //         &path,
-    //         &data_type,
-    //         &DEFAULT_ASSET_SUBDIR_METADATA_NAME.to_string(),
-    //     ]);
-    //     if Path::new(&metadata_path).exists() == false {
-    //         std::fs::create_dir(&metadata_path)?;
-    //     }
-
-    //     Ok(())
-    // }
 }
 
 mod cache {
