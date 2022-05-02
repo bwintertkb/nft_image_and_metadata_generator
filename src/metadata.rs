@@ -7,27 +7,27 @@
 /// - ```creators```: Vector containing ```Creator``` structs instances.
 
 #[derive(Debug, Clone)]
-pub struct MetadataHeader<'a> {
+pub struct MetadataHeader {
     /// Name of the NFT collection
     pub collection_name: String,
-    pub symbol: &'a str,
-    pub description: &'a str,
+    pub symbol: String,
+    pub description: String,
     seller_fee_basis_points: u32,
-    external_url: &'a str,
+    external_url: String,
     /// Vector containing ```Creator``` structs instances.
-    pub creators: Vec<Creator<'a>>,
+    pub creators: Vec<Creator>,
 }
 
-impl<'a> MetadataHeader<'a> {
+impl MetadataHeader {
     /// Returns a ```MetadataHeader``` instance
     pub fn new(
         collection_name: String,
-        symbol: &'a str,
-        description: &'a str,
+        symbol: String,
+        description: String,
         seller_fee_basis_points: u32,
-        external_url: &'a str,
-        creators: Vec<Creator<'a>>,
-    ) -> MetadataHeader<'a> {
+        external_url: String,
+        creators: Vec<Creator>,
+    ) -> MetadataHeader {
         MetadataHeader {
             collection_name: collection_name,
             symbol: symbol,
@@ -44,16 +44,16 @@ impl<'a> MetadataHeader<'a> {
 /// ```address``` refers to the Solana address of the payee wallet. ```share``` is the percentage of Sol to be
 /// sent to the address. Note that for multiple ```Creator``` objects the sum of the shares must equal 100.
 #[derive(Debug, Clone)]
-pub struct Creator<'a> {
+pub struct Creator {
     /// Solana address of the payee wallet
-    pub address: &'a str,
+    pub address: String,
     /// Share of the Sol to be sent to the address, e.g. a value of 80 corresponds to 80%.
     pub share: u8,
 }
 
-impl<'a> Creator<'a> {
+impl Creator {
     /// Returns a ```Creator``` instance
-    pub fn new(address: &'a str, share: u8) -> Creator {
+    pub fn new(address: String, share: u8) -> Creator {
         Creator {
             address: address,
             share: share,
@@ -80,15 +80,15 @@ impl Attributes {
 
 /// Properties related to the NFT. This is automatically generated.
 #[derive(Debug, Clone)]
-pub struct Properties<'a> {
+pub struct Properties {
     /// Returns a ```Properties``` instance
     files: Vec<Files>,
     category: String,
-    creators: Vec<Creator<'a>>,
+    creators: Vec<Creator>,
 }
 
-impl<'a> Properties<'a> {
-    pub fn new(files: Vec<Files>, category: String, creators: Vec<Creator<'a>>) -> Properties {
+impl Properties {
+    pub fn new(files: Vec<Files>, category: String, creators: Vec<Creator>) -> Properties {
         Properties {
             files: files,
             category: category,
@@ -120,14 +120,14 @@ pub trait Json {
     fn to_json(&self) -> json::JsonValue;
 }
 
-impl<'a> Json for MetadataHeader<'a> {
+impl Json for MetadataHeader {
     fn to_json(&self) -> json::JsonValue {
         let mut metadata = json::JsonValue::new_object();
         metadata["name"] = self.collection_name.clone().into();
-        metadata["symbol"] = self.symbol.into();
-        metadata["description"] = self.description.into();
+        metadata["symbol"] = self.symbol.clone().into();
+        metadata["description"] = self.description.clone().into();
         metadata["seller_fee_basis_points"] = self.seller_fee_basis_points.into();
-        metadata["external_url"] = self.external_url.into();
+        metadata["external_url"] = self.external_url.clone().into();
         let mut creators: Vec<json::JsonValue> = Vec::new();
         for creator in &self.creators {
             creators.push(creator.to_json());
@@ -137,10 +137,10 @@ impl<'a> Json for MetadataHeader<'a> {
     }
 }
 
-impl<'a> Json for Creator<'a> {
+impl Json for Creator {
     fn to_json(&self) -> json::JsonValue {
         let mut creator = json::JsonValue::new_object();
-        creator["address"] = self.address.into();
+        creator["address"] = self.address.clone().into();
         creator["share"] = self.share.into();
         creator
     }
@@ -155,7 +155,7 @@ impl Json for Attributes {
     }
 }
 
-impl<'a> Json for Properties<'a> {
+impl Json for Properties {
     fn to_json(&self) -> json::JsonValue {
         let mut prop = json::JsonValue::new_object();
         let mut files: Vec<json::JsonValue> = Vec::new();

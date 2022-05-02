@@ -82,6 +82,8 @@ use std::collections::HashMap;
 use std::fs;
 use std::io::Write;
 use std::path::Path;
+use std::sync::Arc;
+use std::thread;
 
 extern crate image;
 extern crate rand;
@@ -127,7 +129,7 @@ pub struct ImageGenerator<'a> {
     layer_exclusion_prob: Vec<f32>,
     num_assets: u64,
     delimeter: char,
-    metadata_header: MetadataHeader<'a>,
+    metadata_header: MetadataHeader,
     idx: u64,
 }
 
@@ -142,7 +144,7 @@ impl<'a> ImageGenerator<'a> {
         layer_exclusion_prob: Option<Vec<f32>>,
         num_assets: u64,
         delimeter: char,
-        metadata_header: MetadataHeader<'a>,
+        metadata_header: MetadataHeader,
     ) -> ImageGenerator<'a> {
         let _network = network.clone();
         let layer_exclusion_prob = ImageGenerator::verify_layer_exclusion_probability(
@@ -192,46 +194,24 @@ impl<'a> ImageGenerator<'a> {
         }
     }
 
-    fn layer_img_store(
-        &self,
-        paths: &Vec<String>,
-        cache: &mut cache::ImageCache,
-    ) -> Vec<image::DynamicImage> {
-        let mut img_store: Vec<image::DynamicImage> = Vec::new();
-        for path in paths.into_iter() {
-            if let Ok(image) = cache.query(path) {
-                img_store.push(image.clone());
-            } else {
-                // Not in cache, load image from disk
-                cache.update(path.to_string(), image::open(path).unwrap());
-                img_store.push(cache.query(&path[..]).unwrap().clone());
-            }
-        }
-        img_store
-    }
-    fn get_value_from_asset(&self, asset_name: &String) -> String {
-        let split_asset_name: Vec<&str> = asset_name.split(self.delimeter).map(|x| x).collect();
-        String::from(split_asset_name[0])
-    }
-
     fn set_up_output_directory(&self, data_type: String) -> std::io::Result<()> {
-        let path = String::from(self.output_path);
+        let path = self.output_path.to_owned();
         if Path::new(&path).exists() == false {
             std::fs::create_dir(&path)?;
         }
-        let data_type_path = util::create_path(vec![&path, &data_type]);
+        let data_type_path = util::create_path(vec![&path, &DEFAULT_ASSET_DIR_NAME.to_owned()]);
+        if Path::new(&data_type_path).exists() == false {
+            std::fs::create_dir(&data_type_path)?;
+        }
+        let data_type_path = util::create_path(vec![&path, &DEFAULT_METADATA_DIR_NAME.to_owned()]);
         if Path::new(&data_type_path).exists() == false {
             std::fs::create_dir(&data_type_path)?;
         }
 
-        if data_type != DEFAULT_ASSET_DIR_NAME {
-            return Ok(());
-        }
-
         let img_path = util::create_path(vec![
             &path,
-            &data_type,
-            &DEFAULT_ASSET_SUBDIR_IMG_NAME.to_string(),
+            &DEFAULT_ASSET_DIR_NAME.to_owned(),
+            &DEFAULT_ASSET_SUBDIR_IMG_NAME.to_owned(),
         ]);
         if Path::new(&img_path).exists() == false {
             std::fs::create_dir(&img_path)?;
@@ -239,8 +219,8 @@ impl<'a> ImageGenerator<'a> {
 
         let metadata_path = util::create_path(vec![
             &path,
-            &data_type,
-            &DEFAULT_ASSET_SUBDIR_METADATA_NAME.to_string(),
+            &DEFAULT_ASSET_DIR_NAME.to_owned(),
+            &DEFAULT_ASSET_SUBDIR_METADATA_NAME.to_owned(),
         ]);
         if Path::new(&metadata_path).exists() == false {
             std::fs::create_dir(&metadata_path)?;
@@ -249,161 +229,57 @@ impl<'a> ImageGenerator<'a> {
         Ok(())
     }
 
-    fn output_metadata_to_disk(
-        &self,
-        data_type: String,
-        path: String,
-        metadata: &String,
-    ) -> std::io::Result<()> {
-        self.set_up_output_directory(data_type.clone())?;
-        std::fs::write(path, metadata)?;
-
-        Ok(())
-    }
-
-    fn format_full_metadata(&self, data: Vec<String>) -> String {
-        let data_len = data.len();
-        let mut data_store: Vec<String> = vec![String::new(); data_len];
-        for (idx, mut val) in data.into_iter().enumerate() {
-            if idx < data_len - 1 {
-                val.push(',');
-            }
-            data_store[idx] = val
-        }
-        let str_data_store = String::from_iter(data_store);
-        let mut s_bracket = String::from("[");
-        let e_bracket = String::from("]");
-        s_bracket.push_str(&str_data_store);
-        s_bracket.push_str(&e_bracket);
-        s_bracket
-    }
-
-    fn sol_metadata(&mut self, asset_paths: &Vec<String>, hash: String) -> json::JsonValue {
-        let mut metadata = self.metadata_header.clone();
-        let append_to_name = format!(" {}{}", self.delimeter, self.idx);
-        metadata.collection_name.push_str(&append_to_name);
-        let creators = metadata.creators.clone();
-        let mut img_metadata = metadata.to_json();
-        img_metadata["image"] = format!("{}.png", self.idx).into();
-        img_metadata["edition"] = self.idx.into();
-        img_metadata["image_sha256"] = hash.into();
-        img_metadata.remove("creators");
-        let mut att_store: Vec<json::JsonValue> = Vec::new();
-        for path in asset_paths {
-            let trait_type = util::get_subdirectory(&path[..], 2 as usize);
-            let value = self.get_value_from_asset(&util::get_subdirectory(&path[..], 1 as usize));
-            let att: Attributes = Attributes::new(trait_type, value);
-            att_store.push(att.to_json());
-        }
-        let files = Files::new(format!("{}.png", self.idx), String::from("image/png"));
-        let category = String::from("image");
-        let prop = Properties::new(vec![files], category, creators);
-        let prop_json = prop.to_json();
-        img_metadata["attributes"] = att_store.into();
-        img_metadata["properties"] = prop_json.into();
-        img_metadata
-    }
-    fn eth_metadata(&mut self, asset_paths: &Vec<String>, hash: String) -> json::JsonValue {
-        let mut metadata = self.metadata_header.clone();
-        let append_to_name = format!(" {}{}", self.delimeter, self.idx);
-        metadata.collection_name.push_str(&append_to_name);
-        let mut img_metadata = metadata.to_json();
-        img_metadata["image"] = format!("{}{}{}.png", self.base_uri, '/', self.idx).into();
-        img_metadata["edition"] = self.idx.into();
-        img_metadata["image_sha256"] = hash.into();
-        img_metadata.remove("creators");
-        let mut att_store: Vec<json::JsonValue> = Vec::new();
-        for path in asset_paths {
-            let trait_type = util::get_subdirectory(&path[..], 2 as usize);
-            let value = self.get_value_from_asset(&util::get_subdirectory(&path[..], 1 as usize));
-            let att: Attributes = Attributes::new(trait_type, value);
-            att_store.push(att.to_json());
-        }
-        img_metadata["attributes"] = att_store.into();
-        let compiler: String = String::from("Rust NFT image and metadata generator");
-        img_metadata["compiler"] = compiler.into();
-        img_metadata.remove("symbol");
-        img_metadata.remove("seller_fee_basis_points");
-        img_metadata
-    }
-
-    fn gen_img_metadata(
-        &mut self,
-        asset_paths: &Vec<Vec<String>>,
-        output_paths: &Vec<String>,
-    ) -> std::io::Result<()> {
-        print!("\n");
-        let mut full_metadata: Vec<String> = Vec::new();
-        for (idx, asset_path) in asset_paths.into_iter().enumerate() {
-            print!("\rSaving metadata to disk: {}/{}", idx + 1, self.num_assets);
-            std::io::stdout().flush().unwrap();
-            let p = &output_paths[idx];
-            let hash = sha256::digest_file(p).unwrap();
-            let metadata = match self.network {
-                Network::Eth => self.eth_metadata(asset_path, hash),
-                Network::Sol => self.sol_metadata(asset_path, hash),
-            };
-            let data = metadata.to_string();
-            let path = util::create_path(vec![
+    fn get_output_paths(&self, num_paths: usize) -> Vec<String> {
+        let mut output_paths = vec![String::new(); num_paths];
+        let mut idx = self.idx;
+        for i in 0..num_paths {
+            let output_path = util::create_path(vec![
                 &String::from(self.output_path),
                 &String::from(DEFAULT_ASSET_DIR_NAME),
-                &String::from(DEFAULT_ASSET_SUBDIR_METADATA_NAME),
-                &format!("{}.json", self.idx),
+                &String::from(DEFAULT_ASSET_SUBDIR_IMG_NAME),
+                &format!("{}.png", idx),
             ]);
-            self.output_metadata_to_disk(String::from(DEFAULT_ASSET_DIR_NAME), path, &data)?;
-            self.idx += 1;
-            full_metadata.push(data);
+            output_paths[i] = output_path;
+            idx += 1;
         }
-        let full_metadata = self.format_full_metadata(full_metadata);
-        let path = util::create_path(vec![
-            &String::from(self.output_path),
-            &String::from(DEFAULT_METADATA_DIR_NAME),
-            &String::from("_metadata.json"),
-        ]);
-        self.output_metadata_to_disk(
-            String::from(DEFAULT_METADATA_DIR_NAME),
-            path,
-            &full_metadata,
-        )?;
-
-        Ok(())
+        return output_paths;
     }
 
     /// Function used to generate the NFTs and metadata. Returns a ```Result``` enum.
     /// The ```Ok``` result will contain an empty tuple. The error result will most likely be
     /// and ```std::io::Error```, generally because paths cannot be read.
-    pub fn generate(&mut self) -> Result<(), std::io::Error> {
+    pub fn generate(&self) -> Result<(), std::io::Error> {
         let mixed_asset_paths = self.gen_mix_assets_paths();
-        let mix_assets_paths_img = mixed_asset_paths.clone();
-        let mut output_paths: Vec<String> = vec![String::new(); mix_assets_paths_img.len()];
-        let mut cache = cache::ImageCache::new();
+        let output_paths: Vec<String> = self.get_output_paths(mixed_asset_paths.len());
         self.set_up_output_directory(DEFAULT_ASSET_DIR_NAME.to_string())
             .unwrap();
-        for (idx, asset_paths) in mix_assets_paths_img.into_iter().enumerate() {
-            let img_store = self.layer_img_store(&asset_paths, &mut cache);
-            let mut base_img = img_store[0].clone();
-            for img in img_store.into_iter() {
-                image::imageops::overlay(&mut base_img, &img, 0, 0);
-            }
 
-            let output_path = util::create_path(vec![
-                &String::from(self.output_path),
-                &String::from(DEFAULT_ASSET_DIR_NAME),
-                &String::from(DEFAULT_ASSET_SUBDIR_IMG_NAME),
-                &format!("{}.png", self.idx),
-            ]);
-
-            base_img.save(output_path.clone()).unwrap();
-            output_paths[idx] = output_path;
-            print!(
-                "\rGenerating images, pct. complete: {:.2}%",
-                ((idx as f32 + 1.) / self.num_assets as f32) * 100.
-            );
-            std::io::stdout().flush().unwrap();
-            self.idx += 1;
+        let num = self.num_assets as usize;
+        let mut threads = Vec::new();
+        let img_handler = Arc::new(ImageHandler::new(
+            num,
+            mixed_asset_paths,
+            output_paths,
+            self.network.clone(),
+            self.output_path.to_owned(),
+            self.delimeter,
+            self.idx,
+            self.metadata_header.clone(),
+            self.base_uri.to_owned(),
+        ));
+        let img_handler2 = img_handler.clone();
+        let mut handle = thread::spawn(move || {
+            img_handler.image_to_disk();
+        });
+        threads.push(handle);
+        handle = thread::spawn(move || {
+            img_handler2.gen_img_metadata().unwrap();
+        });
+        threads.push(handle);
+        for h in threads.into_iter() {
+            h.join().unwrap();
         }
-        self.idx = ImageGenerator::get_start_index(self.network.clone());
-        self.gen_img_metadata(&mixed_asset_paths, &output_paths)?;
+        //self.gen_img_metadata(&mixed_asset_paths, &output_paths)?;
 
         Ok(())
     }
@@ -593,6 +469,233 @@ impl<'a> ImageGenerator<'a> {
             }
         }
     }
+}
+
+#[derive(Debug, Clone)]
+struct ImageHandler {
+    num_assets: usize,
+    mixed_asset_paths: Vec<Vec<String>>,
+    output_paths: Vec<String>,
+    network: Network,
+    output_path: String,
+    delimeter: char,
+    idx: u64,
+    metadata_header: MetadataHeader,
+    base_uri: String,
+}
+
+impl ImageHandler {
+    fn new(
+        num_assets: usize,
+        mixed_asset_paths: Vec<Vec<String>>,
+        output_paths: Vec<String>,
+        network: Network,
+        output_path: String,
+        delimeter: char,
+        idx: u64,
+        metadata_header: MetadataHeader,
+        base_uri: String,
+    ) -> Self {
+        Self {
+            num_assets: num_assets,
+            mixed_asset_paths: mixed_asset_paths,
+            output_paths: output_paths,
+            network: network,
+            output_path: output_path,
+            delimeter: delimeter,
+            idx: idx,
+            metadata_header: metadata_header,
+            base_uri: base_uri,
+        }
+    }
+
+    fn image_to_disk(&self) {
+        let mut cache = cache::ImageCache::new();
+        for (idx, asset_paths) in self.mixed_asset_paths.clone().into_iter().enumerate() {
+            let img_store = self.layer_img_store(&asset_paths, &mut cache);
+            let mut base_img = img_store[0].clone();
+            for img in img_store.into_iter() {
+                image::imageops::overlay(&mut base_img, &img, 0, 0);
+            }
+
+            base_img.save(self.output_paths[idx].clone()).unwrap();
+            println!(
+                "\rGenerating images, pct. complete: {:.2}%",
+                ((idx as f32 + 1.) / self.num_assets as f32) * 100.
+            );
+            //print!("SOMETHING HERE")
+            //std::io::stdout().flush().unwrap();
+        }
+    }
+
+    fn layer_img_store(
+        &self,
+        paths: &Vec<String>,
+        cache: &mut cache::ImageCache,
+    ) -> Vec<image::DynamicImage> {
+        let mut img_store: Vec<image::DynamicImage> = Vec::new();
+        for path in paths.into_iter() {
+            if let Ok(image) = cache.query(path) {
+                img_store.push(image.clone());
+            } else {
+                // Not in cache, load image from disk
+                cache.update(path.to_string(), image::open(path).unwrap());
+                img_store.push(cache.query(&path[..]).unwrap().clone());
+            }
+        }
+        img_store
+    }
+
+    fn sol_metadata(&self, asset_paths: &Vec<String>, idx: u64) -> json::JsonValue {
+        let mut metadata = self.metadata_header.clone();
+        let append_to_name = format!(" {}{}", self.delimeter, idx);
+        metadata.collection_name.push_str(&append_to_name);
+        let creators = metadata.creators.clone();
+        let mut img_metadata = metadata.to_json();
+        img_metadata["image"] = format!("{}.png", idx).into();
+        img_metadata["edition"] = idx.into();
+        img_metadata.remove("creators");
+        let mut att_store: Vec<json::JsonValue> = Vec::new();
+        for path in asset_paths {
+            let trait_type = util::get_subdirectory(&path[..], 2 as usize);
+            let value = self.get_value_from_asset(&util::get_subdirectory(&path[..], 1 as usize));
+            let att: Attributes = Attributes::new(trait_type, value);
+            att_store.push(att.to_json());
+        }
+        let files = Files::new(format!("{}.png", self.idx), String::from("image/png"));
+        let category = String::from("image");
+        let prop = Properties::new(vec![files], category, creators);
+        let prop_json = prop.to_json();
+        img_metadata["attributes"] = att_store.into();
+        img_metadata["properties"] = prop_json.into();
+        img_metadata
+    }
+    fn eth_metadata(&self, asset_paths: &Vec<String>, idx: u64) -> json::JsonValue {
+        let mut metadata = self.metadata_header.clone();
+        let append_to_name = format!(" {}{}", self.delimeter, idx);
+        metadata.collection_name.push_str(&append_to_name);
+        let mut img_metadata = metadata.to_json();
+        img_metadata["image"] = format!("{}{}{}.png", &self.base_uri, '/', idx).into();
+        img_metadata["edition"] = idx.into();
+        img_metadata.remove("creators");
+        let mut att_store: Vec<json::JsonValue> = Vec::new();
+        for path in asset_paths {
+            let trait_type = util::get_subdirectory(&path[..], 2 as usize);
+            let value = self.get_value_from_asset(&util::get_subdirectory(&path[..], 1 as usize));
+            let att: Attributes = Attributes::new(trait_type, value);
+            att_store.push(att.to_json());
+        }
+        img_metadata["attributes"] = att_store.into();
+        let compiler: String = String::from("Rust NFT image and metadata generator");
+        img_metadata["compiler"] = compiler.into();
+        img_metadata.remove("symbol");
+        img_metadata.remove("seller_fee_basis_points");
+        img_metadata
+    }
+
+    fn gen_img_metadata(&self) -> std::io::Result<()> {
+        let mut full_metadata: Vec<String> = Vec::new();
+        let mut i = self.idx;
+        for (idx, asset_path) in self.mixed_asset_paths.clone().into_iter().enumerate() {
+            println!("\rSaving metadata to disk: {}/{}", idx + 1, self.num_assets);
+            let metadata = match self.network {
+                Network::Eth => self.eth_metadata(&asset_path, i),
+                Network::Sol => self.sol_metadata(&asset_path, i),
+            };
+            let data = metadata.to_string();
+            let path = util::create_path(vec![
+                &String::from(self.output_path.clone()),
+                &String::from(DEFAULT_ASSET_DIR_NAME),
+                &String::from(DEFAULT_ASSET_SUBDIR_METADATA_NAME),
+                &format!("{}.json", i),
+            ]);
+            self.output_metadata_to_disk(String::from(DEFAULT_ASSET_DIR_NAME), path, &data)?;
+            i += 1;
+            full_metadata.push(data);
+        }
+        let full_metadata = self.format_full_metadata(full_metadata);
+        let path = util::create_path(vec![
+            &String::from(self.output_path.clone()),
+            &String::from(DEFAULT_METADATA_DIR_NAME),
+            &String::from("_metadata.json"),
+        ]);
+        self.output_metadata_to_disk(
+            String::from(DEFAULT_METADATA_DIR_NAME),
+            path,
+            &full_metadata,
+        )?;
+
+        Ok(())
+    }
+
+    fn get_value_from_asset(&self, asset_name: &String) -> String {
+        let split_asset_name: Vec<&str> = asset_name.split(self.delimeter).map(|x| x).collect();
+        String::from(split_asset_name[0])
+    }
+
+    fn output_metadata_to_disk(
+        &self,
+        data_type: String,
+        path: String,
+        metadata: &String,
+    ) -> std::io::Result<()> {
+        //self.set_up_output_directory(data_type.clone())?;
+        std::fs::write(path, metadata)?;
+
+        Ok(())
+    }
+
+    fn format_full_metadata(&self, data: Vec<String>) -> String {
+        let data_len = data.len();
+        let mut data_store: Vec<String> = vec![String::new(); data_len];
+        for (idx, mut val) in data.into_iter().enumerate() {
+            if idx < data_len - 1 {
+                val.push(',');
+            }
+            data_store[idx] = val
+        }
+        let str_data_store = String::from_iter(data_store);
+        let mut s_bracket = String::from("[");
+        let e_bracket = String::from("]");
+        s_bracket.push_str(&str_data_store);
+        s_bracket.push_str(&e_bracket);
+        s_bracket
+    }
+
+    // fn set_up_output_directory(&self, data_type: String) -> std::io::Result<()> {
+    //     let path = String::from(self.output_path.clone());
+    //     if Path::new(&path).exists() == false {
+    //         std::fs::create_dir(&path)?;
+    //     }
+    //     let data_type_path = util::create_path(vec![&path, &data_type]);
+    //     if Path::new(&data_type_path).exists() == false {
+    //         std::fs::create_dir(&data_type_path)?;
+    //     }
+
+    //     if data_type != DEFAULT_ASSET_DIR_NAME {
+    //         return Ok(());
+    //     }
+
+    //     let img_path = util::create_path(vec![
+    //         &path,
+    //         &data_type,
+    //         &DEFAULT_ASSET_SUBDIR_IMG_NAME.to_string(),
+    //     ]);
+    //     if Path::new(&img_path).exists() == false {
+    //         std::fs::create_dir(&img_path)?;
+    //     }
+
+    //     let metadata_path = util::create_path(vec![
+    //         &path,
+    //         &data_type,
+    //         &DEFAULT_ASSET_SUBDIR_METADATA_NAME.to_string(),
+    //     ]);
+    //     if Path::new(&metadata_path).exists() == false {
+    //         std::fs::create_dir(&metadata_path)?;
+    //     }
+
+    //     Ok(())
+    // }
 }
 
 mod cache {
