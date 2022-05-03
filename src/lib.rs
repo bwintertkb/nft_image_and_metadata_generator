@@ -78,6 +78,7 @@ mod util;
 
 use crate::metadata::{Attributes, Files, Json, MetadataHeader, Properties};
 use crate::rand::Rng;
+use rayon::prelude::*;
 use std::{collections::HashMap, fs, io::Write, sync::Arc, thread};
 
 extern crate image;
@@ -492,40 +493,30 @@ impl ImageHandler {
     }
 
     fn image_to_disk(&self) {
-        let mut cache = cache::ImageCache::new();
-        for (idx, asset_paths) in self.mixed_asset_paths.clone().into_iter().enumerate() {
-            let img_store = self.layer_img_store(&asset_paths, &mut cache);
-            let mut base_img = img_store[0].clone();
-            for img in img_store.into_iter() {
-                image::imageops::overlay(&mut base_img, &img, 0, 0);
-            }
+        self.mixed_asset_paths
+            .clone()
+            .into_par_iter()
+            .enumerate()
+            .for_each(|(idx, paths)| {
+                let img_store = self.layer_img_store(&paths);
+                let mut base_img = img_store[0].clone();
+                for img in img_store.into_iter() {
+                    image::imageops::overlay(&mut base_img, &img, 0, 0);
+                }
 
-            base_img.save(self.output_paths[idx].clone()).unwrap();
-            println!(
-                "\rGenerating images, pct. complete: {:.2}%",
-                ((idx as f32 + 1.) / self.num_assets as f32) * 100.
-            );
-            //print!("SOMETHING HERE")
-            //std::io::stdout().flush().unwrap();
-        }
+                base_img.save(self.output_paths[idx].clone()).unwrap();
+                println!(
+                    "\rGenerating images, pct. complete: {:.2}%",
+                    ((idx as f32 + 1.) / self.num_assets as f32) * 100.
+                );
+            });
     }
 
-    fn layer_img_store(
-        &self,
-        paths: &Vec<String>,
-        cache: &mut cache::ImageCache,
-    ) -> Vec<image::DynamicImage> {
-        let mut img_store: Vec<image::DynamicImage> = Vec::new();
-        for path in paths.into_iter() {
-            if let Ok(image) = cache.query(path) {
-                img_store.push(image.clone());
-            } else {
-                // Not in cache, load image from disk
-                cache.update(path.to_string(), image::open(path).unwrap());
-                img_store.push(cache.query(&path[..]).unwrap().clone());
-            }
-        }
-        img_store
+    fn layer_img_store(&self, paths: &Vec<String>) -> Vec<image::DynamicImage> {
+        paths
+            .into_par_iter()
+            .map(|path| image::open(path).unwrap())
+            .collect()
     }
 
     fn sol_metadata(&self, asset_paths: &Vec<String>, idx: u64) -> json::JsonValue {
@@ -544,7 +535,7 @@ impl ImageHandler {
             let att: Attributes = Attributes::new(trait_type, value);
             att_store.push(att.to_json());
         }
-        let files = Files::new(format!("{}.png", self.idx), "image/png".to_owned());
+        let files = Files::new(format!("{}.png", idx), "image/png".to_owned());
         let category = "image".to_owned();
         let prop = Properties::new(vec![files], category, creators);
         let prop_json = prop.to_json();
@@ -578,23 +569,29 @@ impl ImageHandler {
     fn gen_img_metadata(&self) -> std::io::Result<()> {
         let mut full_metadata: Vec<String> = Vec::new();
         let mut i = self.idx;
-        for (idx, asset_path) in self.mixed_asset_paths.clone().into_iter().enumerate() {
-            println!("\rSaving metadata to disk: {}/{}", idx + 1, self.num_assets);
-            let metadata = match self.network {
-                Network::Eth => self.eth_metadata(&asset_path, i),
-                Network::Sol => self.sol_metadata(&asset_path, i),
-            };
-            let data = metadata.to_string();
-            let path = util::generate_path(vec![
-                &String::from(self.output_path.clone()),
-                &String::from(DEFAULT_ASSET_DIR_NAME),
-                &String::from(DEFAULT_ASSET_SUBDIR_METADATA_NAME),
-                &format!("{}.json", i),
-            ]);
-            self.output_metadata_to_disk(path, &data)?;
-            i += 1;
-            full_metadata.push(data);
-        }
+
+        let full_metadata: Vec<String> = self
+            .mixed_asset_paths
+            .clone()
+            .into_par_iter()
+            .enumerate()
+            .map(|(idx, asset_path)| {
+                println!("\rSaving metadata to disk: {}/{}", idx + 1, self.num_assets);
+                let metadata = match self.network {
+                    Network::Eth => self.eth_metadata(&asset_path, self.idx + idx as u64),
+                    Network::Sol => self.sol_metadata(&asset_path, self.idx + idx as u64),
+                };
+                let data = metadata.to_string();
+                let path = util::generate_path(vec![
+                    &String::from(self.output_path.clone()),
+                    &String::from(DEFAULT_ASSET_DIR_NAME),
+                    &String::from(DEFAULT_ASSET_SUBDIR_METADATA_NAME),
+                    &format!("{}.json", self.idx + idx as u64),
+                ]);
+                self.output_metadata_to_disk(path, &data).unwrap();
+                data
+            })
+            .collect();
         let full_metadata = self.format_full_metadata(full_metadata);
         let path = util::generate_path(vec![
             &String::from(self.output_path.clone()),

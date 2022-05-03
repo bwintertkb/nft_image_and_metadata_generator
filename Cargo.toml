@@ -16,6 +16,7 @@ json = "0.12.4"
 rand = "0.8.5"
 regex = "1"
 sha256 = "1.0.3"
+rayon = "1.5"
 
 [profile.dev]
 opt-level = 0
