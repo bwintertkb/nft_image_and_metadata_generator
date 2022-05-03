@@ -1,3 +1,4 @@
+use std::fs;
 use std::path::{Path, PathBuf};
 
 pub fn get_subdirectory(path: &str, offset: usize) -> String {
@@ -19,5 +20,14 @@ pub fn create_dir(path: &str) -> std::io::Result<()> {
     if Path::new(&path).exists() == false {
         std::fs::create_dir(&path)?;
     }
+    Ok(())
+}
+
+pub fn remove_dir_all(path: &str) -> std::io::Result<()> {
+    if Path::new(path).exists() == true {
+        // Remove directory if it already exists
+        fs::remove_dir_all(generate_path(vec![&path.to_owned()]))?;
+    };
+
     Ok(())
 }

@@ -235,6 +235,8 @@ impl<'a> ImageGenerator<'a> {
     /// The ```Ok``` result will contain an empty tuple. The error result will most likely be
     /// and ```std::io::Error```, generally because paths cannot be read.
     pub fn generate(&self) -> Result<(), std::io::Error> {
+        util::remove_dir_all(self.output_path)?;
+
         let mixed_asset_paths = self.gen_mix_assets_paths();
         let output_paths: Vec<String> = self.get_output_paths(mixed_asset_paths.len());
         self.set_up_output_directory()?;
@@ -253,12 +255,17 @@ impl<'a> ImageGenerator<'a> {
             self.base_uri.to_owned(),
         ));
         let img_handler2 = img_handler.clone();
+        let img_handler3 = img_handler.clone();
         let mut handle = thread::spawn(move || {
-            img_handler.image_to_disk();
+            img_handler.display_progress();
         });
         threads.push(handle);
         handle = thread::spawn(move || {
-            img_handler2.gen_img_metadata().unwrap();
+            img_handler2.image_to_disk();
+        });
+        threads.push(handle);
+        handle = thread::spawn(move || {
+            img_handler3.gen_img_metadata().unwrap();
         });
         threads.push(handle);
         for h in threads.into_iter() {
@@ -503,12 +510,7 @@ impl ImageHandler {
                 for img in img_store.into_iter() {
                     image::imageops::overlay(&mut base_img, &img, 0, 0);
                 }
-
                 base_img.save(self.output_paths[idx].clone()).unwrap();
-                println!(
-                    "\rGenerating images, pct. complete: {:.2}%",
-                    ((idx as f32 + 1.) / self.num_assets as f32) * 100.
-                );
             });
     }
 
@@ -567,16 +569,12 @@ impl ImageHandler {
     }
 
     fn gen_img_metadata(&self) -> std::io::Result<()> {
-        let mut full_metadata: Vec<String> = Vec::new();
-        let mut i = self.idx;
-
         let full_metadata: Vec<String> = self
             .mixed_asset_paths
             .clone()
             .into_par_iter()
             .enumerate()
             .map(|(idx, asset_path)| {
-                println!("\rSaving metadata to disk: {}/{}", idx + 1, self.num_assets);
                 let metadata = match self.network {
                     Network::Eth => self.eth_metadata(&asset_path, self.idx + idx as u64),
                     Network::Sol => self.sol_metadata(&asset_path, self.idx + idx as u64),
@@ -630,30 +628,39 @@ impl ImageHandler {
         s_bracket.push_str(&e_bracket);
         s_bracket
     }
-}
 
-mod cache {
-    use std::collections::HashMap;
+    fn display_progress(&self) {
+        let path_imgs = util::generate_path(vec![
+            &self.output_path,
+            &DEFAULT_ASSET_DIR_NAME.to_owned(),
+            &DEFAULT_ASSET_SUBDIR_IMG_NAME.to_owned(),
+        ]);
 
-    pub struct ImageCache {
-        data: HashMap<String, image::DynamicImage>,
-    }
-
-    impl ImageCache {
-        pub fn new() -> ImageCache {
-            let data: HashMap<String, image::DynamicImage> = HashMap::new();
-            ImageCache { data: data }
-        }
-
-        pub fn query(&self, key: &str) -> Result<&image::DynamicImage, String> {
-            if self.data.contains_key(key) {
-                return Ok(self.data.get(key).unwrap());
+        let path_mtd = util::generate_path(vec![
+            &self.output_path,
+            &DEFAULT_ASSET_DIR_NAME.to_owned(),
+            &DEFAULT_ASSET_SUBDIR_METADATA_NAME.to_owned(),
+        ]);
+        let mut count = 0;
+        while count < self.num_assets as u64 {
+            let path_imgs = fs::read_dir(&path_imgs).unwrap();
+            let path_mtd = fs::read_dir(&path_mtd).unwrap();
+            let mut total_imgs = 0;
+            let mut total_mtd = 0;
+            for _ in path_imgs {
+                total_imgs += 1;
             }
-            Err("Key not found, adding it to cache...".to_string())
+            for _ in path_mtd {
+                total_mtd += 1;
+            }
+            print!(
+                "\rSaving to disk... Images: {}/{}, Metadata: {}/{}",
+                total_imgs, self.num_assets, total_mtd, self.num_assets
+            );
+            std::io::stdout().flush().unwrap();
+            count = total_imgs;
         }
-
-        pub fn update(&mut self, key: String, data: image::DynamicImage) {
-            self.data.insert(key, data);
-        }
+        print!("\n");
+        println!("Saving concatenated metadata to disk...");
     }
 }
