@@ -4,39 +4,36 @@ use nft_image_and_metadata_generator::{
 };
 
 fn main() {
-    let collection_name = String::from("Test collection");
+    let collection_name = String::from("Shapes");
     let symbol = "TestSymbol";
     let description = "A test for generating NFT images along with the metadata.";
     let seller_fee_basis_points: u32 = 1000;
     let external_url = "https://www.rust-lang.org/";
-    let base_uri = "ipfs://NewUriToReplace"; // Not important for sol
-    let address1 = "0xb12044453f400D9fa1a00DD01B10128FE4720723";
-    let share1: u8 = 50;
-    let creator1: Creator = Creator::new(address1, share1);
-    let address2 = "FjKvLgGVB6dPio31yFvBNsw6HFhqxbC9dzRasbHFwZfM";
-    let share2: u8 = 50;
-    let creator2: Creator = Creator::new(address2, share2);
-    let creators: Vec<Creator> = vec![creator1, creator2];
+    let base_uri = "ipfs://{CID}"; // Not important for sol
+    let address1 = "Buqs3mX5xS3XQeQBHxVnaazYXGY2tgeV6Gx4npyWG9gd";
+    let share1: u8 = 100;
+    let creator1: Creator = Creator::new(address1.to_owned(), share1);
+    let creators: Vec<Creator> = vec![creator1];
     let metadata: MetadataHeader = MetadataHeader::new(
         collection_name,
-        symbol,
-        description,
+        symbol.to_owned(),
+        description.to_owned(),
         seller_fee_basis_points,
-        external_url,
+        external_url.to_owned(),
         creators,
     );
 
-    let path = "./layers";
+    let path = "G:/rust_nft_gen_crate/nft_image_and_metadata_generator/example/layers";
     let output_path = "./output";
-    let network = Network::Eth;
+    let network = Network::Sol;
     let layer_order = vec!["Background", "Square", "Circle"];
 
     let layer_exclusion_probability = vec![0.0, 0.0, 0.2];
 
     let delimeter = '#';
-    let num_assets: u64 = 5;
+    let num_assets: u64 = 20;
 
-    let mut img = ImageGenerator::new(
+    let img = ImageGenerator::new(
         path,
         output_path,
         network,
@@ -47,5 +44,6 @@ fn main() {
         delimeter,
         metadata,
     );
+
     img.generate().unwrap();
 }
