@@ -11,7 +11,7 @@ The video guide can be found here: https://www.youtube.com/watch?v=XgQ2sTE5CfI&a
 
 ```
 [dependencies]
-nft_image_and_metadata_generator = "0.2.0"
+nft_image_and_metadata_generator = "0.2.1"
 ```
 
 ### Example
