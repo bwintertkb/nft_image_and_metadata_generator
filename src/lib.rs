@@ -79,7 +79,7 @@ mod util;
 use crate::metadata::{Attributes, Files, Json, MetadataHeader, Properties};
 use crate::rand::Rng;
 use rayon::prelude::*;
-use std::{collections::HashMap, fs, io::Write, sync::Arc, thread};
+use std::{collections::HashMap, fs, io::Write, sync::Arc, thread, thread::JoinHandle};
 
 extern crate image;
 extern crate rand;
@@ -228,7 +228,7 @@ impl<'a> ImageGenerator<'a> {
             output_paths[i] = output_path;
             idx += 1;
         }
-        return output_paths;
+        output_paths
     }
 
     /// Function used to generate the NFTs and metadata. Returns a ```Result``` enum.
@@ -242,7 +242,6 @@ impl<'a> ImageGenerator<'a> {
         self.set_up_output_directory()?;
 
         let num = self.num_assets as usize;
-        let mut threads = Vec::new();
         let img_handler = Arc::new(ImageHandler::new(
             num,
             mixed_asset_paths,
@@ -256,18 +255,16 @@ impl<'a> ImageGenerator<'a> {
         ));
         let img_handler2 = img_handler.clone();
         let img_handler3 = img_handler.clone();
-        let mut handle = thread::spawn(move || {
+        let handle = thread::spawn(move || {
             img_handler.display_progress();
         });
-        threads.push(handle);
-        handle = thread::spawn(move || {
+        let handle2 = thread::spawn(move || {
             img_handler2.image_to_disk();
         });
-        threads.push(handle);
-        handle = thread::spawn(move || {
+        let handle3 = thread::spawn(move || {
             img_handler3.gen_img_metadata().unwrap();
         });
-        threads.push(handle);
+        let threads: [JoinHandle<()>; 3] = [handle, handle2, handle3];
         for h in threads.into_iter() {
             h.join().unwrap();
         }
@@ -461,6 +458,8 @@ impl<'a> ImageGenerator<'a> {
     }
 }
 
+// ImageHandler is a struct used to cache the metadata and images to disk. This struct was designed
+// to perform those tasks via multiple threads.
 #[derive(Debug, Clone)]
 struct ImageHandler {
     num_assets: usize,
@@ -654,7 +653,7 @@ impl ImageHandler {
                 total_mtd += 1;
             }
             print!(
-                "\rSaving to disk... Images: {}/{}, Metadata: {}/{}",
+                "\rGenerating images and metadata... Images: {}/{}, Metadata: {}/{}",
                 total_imgs, self.num_assets, total_mtd, self.num_assets
             );
             std::io::stdout().flush().unwrap();
