@@ -1,3 +1,5 @@
+#![allow(clippy::too_many_arguments)]
+#![allow(clippy::needless_doctest_main)]
 //! # NFT image and metadata generator for Ethereum and Solana
 //!
 //! Inspired by hashlips 'nft_image_and_metada_generator' provides functionality to generate NFT images as well as their respective metadata
@@ -99,6 +101,15 @@ pub enum Network {
     Sol,
 }
 
+impl Network {
+    fn start_index(&self) -> usize {
+        match self {
+            Network::Eth => 1,
+            Network::Sol => 0,
+        }
+    }
+}
+
 /// ```ImageGenerator``` struct is used to generate the NFTs and respective metadata.
 /// Attributes for the ImageGenerator struct:
 /// - ```root_asset_path```: Path to the assets directory
@@ -126,7 +137,7 @@ pub struct ImageGenerator<'a> {
     num_assets: u64,
     delimeter: char,
     metadata_header: MetadataHeader,
-    idx: u64,
+    idx: usize,
 }
 
 impl<'a> ImageGenerator<'a> {
@@ -155,17 +166,18 @@ impl<'a> ImageGenerator<'a> {
             );
         };
 
+        let idx = network.start_index();
         ImageGenerator {
-            root_asset_path: root_asset_path,
-            output_path: output_path,
-            network: network,
-            base_uri: base_uri,
-            layer_order: layer_order,
-            layer_exclusion_prob: layer_exclusion_prob,
-            num_assets: num_assets,
-            delimeter: delimeter,
-            metadata_header: metadata_header,
-            idx: ImageGenerator::get_start_index(_network),
+            root_asset_path,
+            output_path,
+            network,
+            base_uri,
+            layer_order,
+            layer_exclusion_prob,
+            num_assets,
+            delimeter,
+            metadata_header,
+            idx,
         }
     }
 
@@ -177,17 +189,6 @@ impl<'a> ImageGenerator<'a> {
             return val;
         }
         vec![0.0; num_layers]
-    }
-
-    fn get_start_index(network: Network) -> u64 {
-        match network {
-            Network::Eth => {
-                return 1;
-            }
-            Network::Sol => {
-                return 0;
-            }
-        }
     }
 
     fn set_up_output_directory(&self) -> std::io::Result<()> {
@@ -271,14 +272,14 @@ impl<'a> ImageGenerator<'a> {
         Ok(())
     }
 
-    fn get_weight_from_file_name(&self, file_name: &String) -> f32 {
+    fn get_weight_from_file_name(&self, file_name: &str) -> f32 {
         let reg_exp = &format!(r"{}([0-9\\.]*)[^\\.a-z]", self.delimeter)[..];
         let re = regex::Regex::new(reg_exp).unwrap();
-        if file_name.contains(self.delimeter) == false {
+        if !file_name.contains(self.delimeter) {
             return 1.0;
         }
         let mut w: f32 = 0.0;
-        for cap in re.captures_iter(&file_name[..]) {
+        for cap in re.captures_iter(file_name) {
             w = String::from(&cap[0])
                 .replace(self.delimeter, "")
                 .parse::<f32>()
@@ -291,10 +292,10 @@ impl<'a> ImageGenerator<'a> {
     }
 
     fn get_asset_weights(&self, _layer: &Vec<String>) -> Vec<f32> {
-        let mut weights: Vec<f32> = vec![0.0; _layer.len()];
-        for (idx, l) in _layer.into_iter().enumerate() {
-            weights[idx] = self.get_weight_from_file_name(l);
-        }
+        let mut weights: Vec<f32> = Vec::with_capacity(_layer.len());
+        _layer
+            .iter()
+            .for_each(|l| weights.push(self.get_weight_from_file_name(l)));
         weights
     }
 
@@ -317,12 +318,12 @@ impl<'a> ImageGenerator<'a> {
         prob_range
     }
 
-    fn get_weighted_index(&self, prob_range: &Vec<(f32, f32)>) -> usize {
+    fn get_weighted_index(&self, prob_range: &[(f32, f32)]) -> usize {
         // Generate uniform dist. num and get the index from prob_range
         let mut rng = rand::thread_rng();
         let rand = rng.gen::<f32>();
         let mut _idx: usize = 0;
-        for (idx, range) in prob_range.into_iter().enumerate() {
+        for (idx, range) in prob_range.iter().enumerate() {
             if rand >= range.0 && rand < range.1 {
                 return idx;
             }
@@ -344,7 +345,7 @@ impl<'a> ImageGenerator<'a> {
         false
     }
 
-    fn get_weighted_asset(&self, prob_range: &Vec<(f32, f32)>) -> usize {
+    fn get_weighted_asset(&self, prob_range: &[(f32, f32)]) -> usize {
         self.get_weighted_index(prob_range)
     }
 
@@ -358,7 +359,7 @@ impl<'a> ImageGenerator<'a> {
 
         let mut _idx: usize = 0;
         for odr in &self.layer_order {
-            if assets.contains_key(*odr) == false {
+            if !assets.contains_key(*odr) {
                 panic!(
                     "Layer {} does not exist in assets {:?}",
                     *odr,
@@ -427,7 +428,7 @@ impl<'a> ImageGenerator<'a> {
         let paths = fs::read_dir(&self.root_asset_path).unwrap();
         for path in paths {
             let p = path.unwrap().path().into_os_string().into_string().unwrap();
-            let key = util::get_subdirectory(&p[..], 1 as usize);
+            let key = util::get_subdirectory(&p[..], 1);
             let inner_paths = fs::read_dir(&p[..]).unwrap();
             let mut img_name_store: Vec<String> = Vec::new();
             for inner_path in inner_paths {
@@ -437,7 +438,7 @@ impl<'a> ImageGenerator<'a> {
                     .into_os_string()
                     .into_string()
                     .unwrap();
-                let img_name = util::get_subdirectory(&p[..], 1 as usize);
+                let img_name = util::get_subdirectory(&p[..], 1);
                 img_name_store.push(img_name);
             }
             asset_store.insert(key, img_name_store);
@@ -468,7 +469,7 @@ struct ImageHandler {
     network: Network,
     output_path: String,
     delimeter: char,
-    idx: u64,
+    idx: usize,
     metadata_header: MetadataHeader,
     base_uri: String,
 }
@@ -481,20 +482,20 @@ impl ImageHandler {
         network: Network,
         output_path: String,
         delimeter: char,
-        idx: u64,
+        idx: usize,
         metadata_header: MetadataHeader,
         base_uri: String,
     ) -> Self {
         Self {
-            num_assets: num_assets,
-            mixed_asset_paths: mixed_asset_paths,
-            output_paths: output_paths,
-            network: network,
-            output_path: output_path,
-            delimeter: delimeter,
-            idx: idx,
-            metadata_header: metadata_header,
-            base_uri: base_uri,
+            num_assets,
+            mixed_asset_paths,
+            output_paths,
+            network,
+            output_path,
+            delimeter,
+            idx,
+            metadata_header,
+            base_uri,
         }
     }
 
@@ -520,7 +521,7 @@ impl ImageHandler {
             .collect()
     }
 
-    fn sol_metadata(&self, asset_paths: &Vec<String>, idx: u64) -> json::JsonValue {
+    fn sol_metadata(&self, asset_paths: &[String], idx: usize) -> json::JsonValue {
         let mut metadata = self.metadata_header.clone();
         let append_to_name = format!(" {}{}", self.delimeter, idx);
         metadata.collection_name.push_str(&append_to_name);
@@ -531,8 +532,8 @@ impl ImageHandler {
         img_metadata.remove("creators");
         let mut att_store: Vec<json::JsonValue> = Vec::new();
         for path in asset_paths {
-            let trait_type = util::get_subdirectory(&path[..], 2 as usize);
-            let value = self.get_value_from_asset(&util::get_subdirectory(&path[..], 1 as usize));
+            let trait_type = util::get_subdirectory(&path[..], 2);
+            let value = self.get_value_from_asset(&util::get_subdirectory(&path[..], 1));
             let att: Attributes = Attributes::new(trait_type, value);
             att_store.push(att.to_json());
         }
@@ -541,10 +542,10 @@ impl ImageHandler {
         let prop = Properties::new(vec![files], category, creators);
         let prop_json = prop.to_json();
         img_metadata["attributes"] = att_store.into();
-        img_metadata["properties"] = prop_json.into();
+        img_metadata["properties"] = prop_json;
         img_metadata
     }
-    fn eth_metadata(&self, asset_paths: &Vec<String>, idx: u64) -> json::JsonValue {
+    fn eth_metadata(&self, asset_paths: &[String], idx: usize) -> json::JsonValue {
         let mut metadata = self.metadata_header.clone();
         let append_to_name = format!(" {}{}", self.delimeter, idx);
         metadata.collection_name.push_str(&append_to_name);
@@ -554,8 +555,8 @@ impl ImageHandler {
         img_metadata.remove("creators");
         let mut att_store: Vec<json::JsonValue> = Vec::new();
         for path in asset_paths {
-            let trait_type = util::get_subdirectory(&path[..], 2 as usize);
-            let value = self.get_value_from_asset(&util::get_subdirectory(&path[..], 1 as usize));
+            let trait_type = util::get_subdirectory(&path[..], 2);
+            let value = self.get_value_from_asset(&util::get_subdirectory(&path[..], 1));
             let att: Attributes = Attributes::new(trait_type, value);
             att_store.push(att.to_json());
         }
@@ -575,15 +576,15 @@ impl ImageHandler {
             .enumerate()
             .map(|(idx, asset_path)| {
                 let metadata = match self.network {
-                    Network::Eth => self.eth_metadata(&asset_path, self.idx + idx as u64),
-                    Network::Sol => self.sol_metadata(&asset_path, self.idx + idx as u64),
+                    Network::Eth => self.eth_metadata(&asset_path, self.idx + idx),
+                    Network::Sol => self.sol_metadata(&asset_path, self.idx + idx),
                 };
                 let data = metadata.to_string();
                 let path = util::generate_path(vec![
-                    &String::from(self.output_path.clone()),
+                    &self.output_path.clone(),
                     &String::from(DEFAULT_ASSET_DIR_NAME),
                     &String::from(DEFAULT_ASSET_SUBDIR_METADATA_NAME),
-                    &format!("{}.json", self.idx + idx as u64),
+                    &format!("{}.json", self.idx + idx),
                 ]);
                 self.output_metadata_to_disk(path, &data).unwrap();
                 data
@@ -591,7 +592,7 @@ impl ImageHandler {
             .collect();
         let full_metadata = self.format_full_metadata(full_metadata);
         let path = util::generate_path(vec![
-            &String::from(self.output_path.clone()),
+            &self.output_path.clone(),
             &String::from(DEFAULT_METADATA_DIR_NAME),
             &String::from("_metadata.json"),
         ]);
@@ -600,8 +601,8 @@ impl ImageHandler {
         Ok(())
     }
 
-    fn get_value_from_asset(&self, asset_name: &String) -> String {
-        let split_asset_name: Vec<&str> = asset_name.split(self.delimeter).map(|x| x).collect();
+    fn get_value_from_asset(&self, asset_name: &str) -> String {
+        let split_asset_name: Vec<&str> = asset_name.split(self.delimeter).collect();
         String::from(split_asset_name[0])
     }
 

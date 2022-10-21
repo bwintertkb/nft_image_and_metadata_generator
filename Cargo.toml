@@ -6,7 +6,7 @@ edition = "2021"
 license = "MIT"
 name = "nft_image_and_metadata_generator"
 repository = "https://github.com/bwintertkb/nft_image_and_metadata_generator.git"
-version = "0.2.1"
+version = "0.2.2"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -14,9 +14,9 @@ version = "0.2.1"
 image = "0.24.0"
 json = "0.12.4"
 rand = "0.8.5"
+rayon = "1.5"
 regex = "1"
 sha256 = "1.0.3"
-rayon = "1.5"
 
 [profile.dev]
 opt-level = 0

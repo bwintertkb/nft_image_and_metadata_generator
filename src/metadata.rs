@@ -29,12 +29,12 @@ impl MetadataHeader {
         creators: Vec<Creator>,
     ) -> MetadataHeader {
         MetadataHeader {
-            collection_name: collection_name,
-            symbol: symbol,
-            description: description,
-            seller_fee_basis_points: seller_fee_basis_points,
-            external_url: external_url,
-            creators: creators,
+            collection_name,
+            symbol,
+            description,
+            seller_fee_basis_points,
+            external_url,
+            creators,
         }
     }
 }
@@ -54,10 +54,7 @@ pub struct Creator {
 impl Creator {
     /// Returns a ```Creator``` instance
     pub fn new(address: String, share: u8) -> Creator {
-        Creator {
-            address: address,
-            share: share,
-        }
+        Creator { address, share }
     }
 }
 
@@ -71,10 +68,7 @@ pub struct Attributes {
 impl Attributes {
     /// Returns a ```Attributes``` instance
     pub fn new(trait_type: String, value: String) -> Attributes {
-        Attributes {
-            trait_type: trait_type,
-            value: value,
-        }
+        Attributes { trait_type, value }
     }
 }
 
@@ -90,9 +84,9 @@ pub struct Properties {
 impl Properties {
     pub fn new(files: Vec<Files>, category: String, creators: Vec<Creator>) -> Properties {
         Properties {
-            files: files,
-            category: category,
-            creators: creators,
+            files,
+            category,
+            creators,
         }
     }
 }
@@ -107,10 +101,7 @@ pub struct Files {
 impl Files {
     /// Returns a ```Files``` instance
     pub fn new(uri: String, _type: String) -> Files {
-        Files {
-            uri: uri,
-            _type: _type,
-        }
+        Files { uri, _type }
     }
 }
 
