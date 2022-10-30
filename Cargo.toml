@@ -3,10 +3,11 @@ authors = ["bwinter"]
 description = "A hashlips inspired NFT image + metadata generator for Ethereum and Solana, written completely in Rust."
 documentation = "https://docs.rs/nft_image_and_metadata_generator/0.1.0/nft_image_and_metadata_generator/"
 edition = "2021"
+keywords = ["nft", "token", "ethereum", "solana", "utility"]
 license = "MIT"
 name = "nft_image_and_metadata_generator"
 repository = "https://github.com/bwintertkb/nft_image_and_metadata_generator.git"
-version = "0.2.2"
+version = "0.2.3"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
